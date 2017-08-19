@@ -2,6 +2,7 @@
 
 #include <SDL2/SDL.h>
 #include <OpenGL/gl3.h>
+
 #include <stdio.h>
 #include <string>
 #include <iostream>
