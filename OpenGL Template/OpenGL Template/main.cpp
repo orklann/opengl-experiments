@@ -118,7 +118,7 @@ bool init(){
         // OpenGL side must also turn on AA
         // See glEnable(GL_POLYGON_SMOOTH);
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES,2);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES,4);
 
         //Create window
         gWindow = SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
