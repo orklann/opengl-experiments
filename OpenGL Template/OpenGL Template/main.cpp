@@ -11,6 +11,8 @@
 #include <errno.h>
 
 #include "GLUtil.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <glm/vec3.hpp> // glm::vec3
 #include <glm/vec4.hpp> // glm::vec4
 #include <glm/mat4x4.hpp> // glm::mat4
@@ -19,11 +21,14 @@
 // Vertice shader
 const char * VERTEX_SHADER = R"SHADER(
 #version 330 core
-
 layout(location = 0) in vec4 vPosition;
+uniform mat4 modelView;
+uniform mat4 project;
+
 void
 main(){
-    gl_Position = vPosition;
+    vec4 pos = project * modelView * vec4((vPosition.xy) / 1.0, 0, 1);
+    gl_Position = pos;
 }
 )SHADER";
 
@@ -39,6 +44,9 @@ main(){
 )SHADER";
 
 
+//Screen dimension constants
+const int SCREEN_WIDTH = 640;
+const int SCREEN_HEIGHT = 480;
 
 GLuint program;
 GLuint vertexbuffer;
@@ -52,21 +60,18 @@ void initVertices(){
     program = LoadShaders(VERTEX_SHADER, FRAGMENT_SHADER);
 
     static const GLfloat g_vertex_buffer_data[] = {
-        -1.0f, -1.0f, 0.0f,
-        1.0f, -1.0f, 0.0f,
-        0.0f,  1.0f, 0.0f,
+        0.0f, 480.0f, 0.0f,
+        320.0f, 0.0f, 0.0f,
+        640.0f, 480.0f, 0.0f,
     };
 
     glGenBuffers(1, &vertexbuffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
 
-}
+   }
 // End Red book
 
-//Screen dimension constants
-const int SCREEN_WIDTH = 640;
-const int SCREEN_HEIGHT = 480;
 
 //Starts up SDL, creates window, and initializes OpenGL
 bool init();
@@ -178,6 +183,17 @@ void render(){
 
     // Use our shader
     glUseProgram(program);
+
+    // Ortho matrix
+    glm::mat4 modelView = glm::mat4(1.0f);
+    modelView = glm::translate(modelView, glm::vec3(0.0, 0.0, -1.0f));
+    GLint uniModelView = glGetUniformLocation(program, "modelView");
+    glUniformMatrix4fv(uniModelView, 1, GL_FALSE, glm::value_ptr(modelView));
+
+
+    glm::mat4 ortho = glm::ortho(0.0f, (float)SCREEN_WIDTH, (float)SCREEN_HEIGHT, 0.0f, 0.1f, 100.0f);
+    GLint uniProj = glGetUniformLocation(program, "project");
+    glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(ortho));
 
     // 1rst attribute buffer : vertices
     glEnableVertexAttribArray(0);
