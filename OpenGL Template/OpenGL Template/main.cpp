@@ -126,8 +126,6 @@ bool init(){
                     printf("Unable to initialize OpenGL!\n");
                     success = false;
                 }
-                
-                initVertices();
             }
         }
     }
@@ -216,6 +214,9 @@ int main(int argc, char* args[]){
         
         //Enable text input
         SDL_StartTextInput();
+        
+        // Vetext init
+        initVertices();
         
         //While application is running
         while(!quit){
