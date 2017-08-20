@@ -14,33 +14,56 @@
 #include "GLUtil.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp> // glm::vec3
 #include <glm/vec4.hpp> // glm::vec4
 #include <glm/mat4x4.hpp> // glm::mat4
 #include <glm/gtc/matrix_transform.hpp> // glm::translate, glm::rotate, glm::scale, glm::perspective
 #include <glm/gtc/constants.hpp> // glm::pi
+
 // Vertice shader
 const char * VERTEX_SHADER = R"SHADER(
 #version 330 core
+#define lineWidth (4.0 + 1.0)
+
 layout(location = 0) in vec4 vPosition;
+in vec2 a_Normal;
+in vec2 a_Direction;
+
+out vec2 out_Normal;
+out vec2 out_Direction;
 uniform mat4 modelView;
 uniform mat4 project;
 
 void
 main(){
-    vec4 pos = project * modelView * vec4((vPosition.xy) / 1.0, 0, 1);
+    vec4 delta = vec4(a_Normal * vec2(lineWidth/2.0), 0, 0);
+    vec4 d = vec4(delta.xy, 0.0, 0.0);
+    vec4 pos = project * modelView * vec4((vPosition.xy + d.xy) / 1.0, 0, 1);
     gl_Position = pos;
+    out_Normal = a_Normal;
+    out_Direction = a_Direction;
 }
 )SHADER";
 
 // Fragment shader
 const char * FRAGMENT_SHADER = R"SHADER(
 #version 330 core
+#define feather 1.0
+#define lineWidth (4.0 + 0.5)
 
+in vec2 out_Normal;
+in vec2 out_Direction;
 out vec4 fColor;
 void
 main(){
-    fColor = vec4(0.0, 0.0, 1.0, 1.0);
+    float dist = length(out_Normal) * lineWidth;
+    float alpha = dist < lineWidth - feather - feather? 1.0 :clamp(((lineWidth - dist) / feather / 2.0) , 0.0, 1.0);
+    float l = length(out_Direction);
+    if (abs(l - 1.0) < 0.01) {
+        alpha = abs(l - 1.0) * 10.0 + 0.2;
+    }
+    fColor = vec4(0.0, 0.0, 0.0, alpha);
 }
 )SHADER";
 
@@ -52,6 +75,24 @@ const int SCREEN_HEIGHT = 480;
 GLuint program;
 GLuint vertexbuffer;
 
+glm::vec2 perp(glm::vec2 p) {
+    float ty = p[1];
+    float y = p[0];
+    float x = -1 * ty;
+    return glm::vec2(x, y);
+}
+
+glm::vec2 unit(glm::vec2 p) {
+    float x = p[0];
+    float y = p[1];
+    float mag = sqrt((x*x) + (y*y));
+    return glm::vec2(x/mag, y/mag);
+}
+
+glm::vec2 mult(glm::vec2 p, float m) {
+    return glm::vec2(p[0] * m, p[1] * m);
+}
+
 void initVertices(){
     GLuint VertexArrayID;
     glGenVertexArrays(1, &VertexArrayID);
@@ -60,17 +101,29 @@ void initVertices(){
     // Create and compile our GLSL program from the shaders
     program = LoadShaders(VERTEX_SHADER, FRAGMENT_SHADER);
 
+    // Line points
+    glm::vec2 p1 = glm::vec2(10, 10);
+    glm::vec2 p2 = glm::vec2(100, 190);
+
+    glm::vec2 cwNormal = perp(unit(p2 - p1));
+    glm::vec2 ccwNormal = mult(cwNormal, -1.0);
+    glm::vec2 direction = unit(p2 - p1);
+    glm::vec2 inverseDirection = mult(direction, -1.0);
+
     static const GLfloat g_vertex_buffer_data[] = {
-        0.0f, 480.0f, 0.0f,
-        320.0f, 0.0f, 0.0f,
-        640.0f, 480.0f, 0.0f,
+        10.0, 10.0, cwNormal[0], cwNormal[1], direction[0], direction[1],
+        10.0, 10.0, ccwNormal[0], ccwNormal[1], direction[0], direction[1],
+        100.0, 190.0, cwNormal[0], cwNormal[1], inverseDirection[0], inverseDirection[1],
+        10.0, 10.0, ccwNormal[0], ccwNormal[1], direction[0], direction[1],
+        100.0, 190.0, cwNormal[0], cwNormal[1], inverseDirection[0], inverseDirection[1],
+        100.0, 190.0, ccwNormal[0], ccwNormal[1], inverseDirection[0], inverseDirection[1]
     };
 
     glGenBuffers(1, &vertexbuffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
 
-   }
+}
 // End Red book
 
 
@@ -118,8 +171,8 @@ bool init(){
         // Turn on AA in SDL
         // OpenGL side must also turn on AA
         // See glEnable(GL_POLYGON_SMOOTH);
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES,4);
+        //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
+        //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES,4);
 
         //Create window
         gWindow = SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
@@ -145,9 +198,11 @@ bool init(){
                 }
             }
 
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             // Antialiasing
-            glEnable(GL_LINE_SMOOTH);
-            glEnable(GL_POLYGON_SMOOTH);
+            //glEnable(GL_LINE_SMOOTH);
+            //glEnable(GL_POLYGON_SMOOTH);
             // MSAA
             //glDisable(GL_MULTISAMPLE);
         }
@@ -162,7 +217,7 @@ bool initGL()
     GLenum error = GL_NO_ERROR;
 
     //Initialize clear color
-    glClearColor(0.9, 0.9, 0.9, 1);
+    glClearColor(1.0, 1.0, 1.0, 1);
 
     //Check for error
     error = glGetError();
@@ -208,20 +263,47 @@ void render(){
     GLint uniProj = glGetUniformLocation(program, "project");
     glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(ortho));
 
-    // 1rst attribute buffer : vertices
-    glEnableVertexAttribArray(0);
+    // 1st attribute buffer : vertices
+    GLuint VertexPosition_location = glGetAttribLocation(program, "vPosition");
+    glEnableVertexAttribArray(VertexPosition_location);
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
     glVertexAttribPointer(
-                          0,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
-                          3,                  // size
+                          VertexPosition_location,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
+                          2,                  // size
                           GL_FLOAT,           // type
                           GL_FALSE,           // normalized?
-                          0,                  // stride
+                          sizeof(GLfloat) * 6,                  // stride
                           (void*)0            // array buffer offset
                           );
 
+    // 2nd attribute buffer : normals
+    GLuint Normal_location = glGetAttribLocation(program, "a_Normal");
+    glEnableVertexAttribArray(Normal_location);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glVertexAttribPointer(
+                          Normal_location,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
+                          2,                  // size
+                          GL_FLOAT,           // type
+                          GL_FALSE,           // normalized?
+                          sizeof(GLfloat) * 6,                  // stride
+                          (void*)(2 * sizeof(GLfloat))           // array buffer offset
+                          );
+
+
+    // 3nd attribute buffer : directions
+    GLuint Direction_location = glGetAttribLocation(program, "a_Direction");
+    glEnableVertexAttribArray(Direction_location);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glVertexAttribPointer(
+                          Direction_location,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
+                          2,                  // size
+                          GL_FLOAT,           // type
+                          GL_FALSE,           // normalized?
+                          sizeof(GLfloat) * 6,                  // stride
+                          (void*)(4 * sizeof(GLfloat))           // array buffer offset
+                          );
     // Draw the triangle !
-    glDrawArrays(GL_TRIANGLES, 0, 3); // 3 indices starting at 0 -> 1 triangle
+    glDrawArrays(GL_TRIANGLES, 0, 6); // 3 indices starting at 0 -> 1 triangle
 
     glDisableVertexAttribArray(0);
 }
