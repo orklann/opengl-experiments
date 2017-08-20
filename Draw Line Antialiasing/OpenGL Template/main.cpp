@@ -106,11 +106,17 @@ void initVertices(){
     glm::vec2 p1 = glm::vec2(10, 10);
     glm::vec2 p2 = glm::vec2(100, 190);
 
-    glm::vec2 cwNormal = perp(unit(p2 - p1));
+    glm::vec2 cwNormal = perp(glm::normalize(p2 - p1));
+    glm::vec2 ccwNormal = cwNormal * glm::vec2(-1.0);
+    glm::vec2 direction = glm::normalize(p2 - p1);
+    glm::vec2 inverseDirection = direction * glm::vec2(-1.0);
+
+    // Use my own math: unit, perp, mult
+    /*glm::vec2 cwNormal = perp(unit(p2 - p1));
     glm::vec2 ccwNormal = mult(cwNormal, -1.0);
     glm::vec2 direction = unit(p2 - p1);
     glm::vec2 inverseDirection = mult(direction, -1.0);
-
+    */
     static const GLfloat g_vertex_buffer_data[] = {
         10.0, 10.0, cwNormal[0], cwNormal[1], direction[0], direction[1],
         10.0, 10.0, ccwNormal[0], ccwNormal[1], direction[0], direction[1],
@@ -176,7 +182,7 @@ bool init(){
         //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES,4);
 
         //Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("Draw Antialiasing Line", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
         if(gWindow == NULL){
             printf( "Window could not be created! SDL Error: %s\n", SDL_GetError());
             success = false;
