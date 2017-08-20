@@ -30,8 +30,8 @@ layout(location = 0) in vec4 vPosition;
 in vec2 a_Normal;
 in vec2 a_Direction;
 
-out vec2 out_Normal;
-out vec2 out_Direction;
+out vec2 vNormal;
+out vec2 vDirection;
 uniform mat4 modelView;
 uniform mat4 project;
 
@@ -41,8 +41,8 @@ main(){
     vec4 d = vec4(delta.xy, 0.0, 0.0);
     vec4 pos = project * modelView * vec4((vPosition.xy + d.xy) / 1.0, 0, 1);
     gl_Position = pos;
-    out_Normal = a_Normal;
-    out_Direction = a_Direction;
+    vNormal = a_Normal;
+    vDirection = a_Direction;
 }
 )SHADER";
 
@@ -52,14 +52,14 @@ const char * FRAGMENT_SHADER = R"SHADER(
 #define feather 1.0
 #define lineWidth (4.0 + 0.5)
 
-in vec2 out_Normal;
-in vec2 out_Direction;
+in vec2 vNormal;
+in vec2 vDirection;
 out vec4 fColor;
 void
 main(){
-    float dist = length(out_Normal) * lineWidth;
+    float dist = length(vNormal) * lineWidth;
     float alpha = dist < lineWidth - feather - feather? 1.0 :clamp(((lineWidth - dist) / feather / 2.0) , 0.0, 1.0);
-    float l = length(out_Direction);
+    float l = length(vDirection);
     if (abs(l - 1.0) < 0.01) {
         alpha = abs(l - 1.0) * 10.0 + 0.2;
     }
@@ -70,6 +70,7 @@ main(){
 
 //Screen dimension constants
 const int SCREEN_WIDTH = 640;
+
 const int SCREEN_HEIGHT = 480;
 
 GLuint program;
