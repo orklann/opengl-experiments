@@ -48,7 +48,6 @@ uniform vec2 u_center;
 uniform float u_radius;
 out vec4 fColor;
 
-uniform float u_lineWidth;
 void
 main(){
     vec2 p = vec2(gl_FragCoord.x, gl_FragCoord.y);
