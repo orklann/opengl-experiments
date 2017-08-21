@@ -62,7 +62,7 @@ main(){
 }
 )SHADER";
 
-const float lineWidth = 4.0;
+const float lineWidth = 4.0 + 1.0;
 
 //Screen dimension constants
 const int SCREEN_WIDTH = 640;
