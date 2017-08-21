@@ -53,12 +53,22 @@ void
 main(){
     vec2 p = vec2(gl_FragCoord.x, gl_FragCoord.y);
     float dist = distance(p, u_center);
-    float alpha = dist > u_radius ? 0.0 : clamp(abs(dist - u_radius) / 1.0, 0.0, 1.0);
+
+    float halfLineWidth = u_lineWidth / 2.0 + 0.5;
+    float d = abs(dist - u_radius);
+    float alpha = 0.0;
+    if (d < halfLineWidth){
+      alpha = clamp(abs(d - halfLineWidth) / 1.0, 0.0, 1.0);
+    } else {
+      alpha = 0.0;
+    }
+
     fColor = vec4(0.0, 0.0, 0.0, alpha);
 }
 )SHADER";
 
 float radius = 50.0;
+float lineWidth = 20.0;
 glm::vec2 center = glm::vec2(100.0, 200.0);
 
 //Screen dimension constants
@@ -97,25 +107,23 @@ void initVertices(){
 
     // Arc points
     glm::vec2 p1 = center;
-    glm::vec2 vP1P2 = glm::vec2(radius, 0);
-    glm::vec2 vP1P3 = glm::vec2(0, -1 * radius);
+    glm::vec2 vP1P2 = glm::vec2(radius + lineWidth, 0);
+    glm::vec2 vP1P3 = glm::vec2(0, -1 * (radius + lineWidth));
 
     glm::vec2 p2 = p1 + vP1P2;
     glm::vec2 p3 = p1 + vP1P3;
     glm::vec2 p4 = p2 + vP1P3;
-    glm::vec2 p5 = glm::vec2((p2[0] + p3[0]) / 2, (p2[1] + p3[1]) / 2);
-
 
     static const GLfloat g_vertex_buffer_data[] = {
         // triangle 1
-       p5[0], p5[1],
-       p2[0], p2[1],
-       p4[0], p4[1],
+        p1[0], p1[1],
+        p2[0], p2[1],
+        p4[0], p4[1],
 
-       // triangle 2
-       p5[0], p5[1],
-       p3[0], p3[1],
-       p4[0], p4[1],
+        // triangle 2
+        p1[0], p1[1],
+        p3[0], p3[1],
+        p4[0], p4[1],
     };
 
     glGenBuffers(1, &vertexbuffer);
@@ -174,7 +182,7 @@ bool init(){
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES,4);
 
         //Create window
-        gWindow = SDL_CreateWindow("Draw Antialiasing Line", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("Stroke Arc", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
         if(gWindow == NULL){
             printf( "Window could not be created! SDL Error: %s\n", SDL_GetError());
             success = false;
@@ -264,6 +272,9 @@ void render(){
 
     GLint uniRadius = glGetUniformLocation(program, "u_radius");
     glUniform1f(uniRadius, radius);
+
+    GLint uniLineWidth = glGetUniformLocation(program, "u_lineWidth");
+    glUniform1f(uniLineWidth, lineWidth);
 
     GLint uniCenter = glGetUniformLocation(program, "u_center");
     // 400 = canvas height, need to translate origin to lower left
