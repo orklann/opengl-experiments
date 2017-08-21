@@ -24,49 +24,45 @@
 // Vertice shader
 const char * VERTEX_SHADER = R"SHADER(
 #version 330 core
-#define lineWidth (4.0 + 1.0)
 
 layout(location = 0) in vec4 vPosition;
 in vec2 a_Normal;
-in vec2 a_Direction;
 
 out vec2 vNormal;
-out vec2 vDirection;
+
+uniform float u_lineWidth;
 uniform mat4 modelView;
 uniform mat4 project;
 
 void
 main(){
-    vec4 delta = vec4(a_Normal * vec2(lineWidth/2.0), 0, 0);
-    vec4 d = vec4(delta.xy, 0.0, 0.0);
-    vec4 pos = project * modelView * vec4((vPosition.xy + d.xy) / 1.0, 0, 1);
+    float lineWidth = u_lineWidth + 1.0;
+    vec4 pos = project * modelView * vec4(vPosition.xy / 1.0, 0, 1);
     gl_Position = pos;
     vNormal = a_Normal;
-    vDirection = a_Direction;
 }
 )SHADER";
 
 // Fragment shader
 const char * FRAGMENT_SHADER = R"SHADER(
 #version 330 core
+
 #define feather 1.0
-#define lineWidth (4.0 + 0.5)
 
 in vec2 vNormal;
-in vec2 vDirection;
 out vec4 fColor;
+
+uniform float u_lineWidth;
 void
 main(){
+    float lineWidth = u_lineWidth + 0.5;
     float dist = length(vNormal) * lineWidth;
     float alpha = dist < lineWidth - feather - feather? 1.0 :clamp(((lineWidth - dist) / feather / 2.0) , 0.0, 1.0);
-    float l = length(vDirection);
-    if (abs(l - 1.0) < 0.01) {
-        alpha = abs(l - 1.0) * 10.0 + 0.2;
-    }
     fColor = vec4(0.0, 0.0, 0.0, alpha);
 }
 )SHADER";
 
+const float lineWidth = 4.0;
 
 //Screen dimension constants
 const int SCREEN_WIDTH = 640;
@@ -103,27 +99,46 @@ void initVertices(){
     program = LoadShaders(VERTEX_SHADER, FRAGMENT_SHADER);
 
     // Line points
-    glm::vec2 p1 = glm::vec2(10, 10);
-    glm::vec2 p2 = glm::vec2(100, 190);
+    glm::vec2 p1 = glm::vec2(50, 20);
+    glm::vec2 p2 = glm::vec2(120, 190);
+    glm::vec2 p3 = glm::vec2(200, 20);
 
-    glm::vec2 cwNormal = perp(glm::normalize(p2 - p1));
-    glm::vec2 ccwNormal = cwNormal * glm::vec2(-1.0);
-    glm::vec2 direction = glm::normalize(p2 - p1);
-    glm::vec2 inverseDirection = direction * glm::vec2(-1.0);
+    glm::vec2 cwNormal_p1p2 = perp(glm::normalize(p2 - p1));
+    glm::vec2 ccwNormal_p1p2 = cwNormal_p1p2 * glm::vec2(-1.0);
 
-    // Use my own math: unit, perp, mult
-    /*glm::vec2 cwNormal = perp(unit(p2 - p1));
-    glm::vec2 ccwNormal = mult(cwNormal, -1.0);
-    glm::vec2 direction = unit(p2 - p1);
-    glm::vec2 inverseDirection = mult(direction, -1.0);
-    */
+    glm::vec2 cwNormal_p2p3 = perp(glm::normalize(p3 - p2));
+    glm::vec2 ccwNormal_p2p3 =  cwNormal_p2p3 * glm::vec2(-1.0);
+
+    glm::vec2 joinNormal = cwNormal_p1p2 + cwNormal_p2p3;
+    float cosHalfAngle = (cwNormal_p2p3[0] * joinNormal[0]) + (cwNormal_p2p3[1] * joinNormal[1]);
+    float miterLengthRatio = 1 / cosHalfAngle;
+
+    // Calculate 6 points to form 2 lines
+    glm::vec2 startPoint1 = p1 + (cwNormal_p1p2 * glm::vec2(lineWidth / 2.0));
+    glm::vec2 startPoint2 = p1 + (ccwNormal_p1p2 * glm::vec2(lineWidth / 2.0));
+    glm::vec2 miterVector = joinNormal * glm::vec2(miterLengthRatio * lineWidth / 2.0);
+    glm::vec2 extrudePointUp = p2 + miterVector;
+    glm::vec2 extrudePointDown = p2 + (miterVector * glm::vec2(-1.0));
+    glm::vec2 endPoint1 = p3 + (cwNormal_p2p3 * glm::vec2(lineWidth / 2.0));
+    glm::vec2 endPoint2 = p3 + (ccwNormal_p2p3 * glm::vec2(lineWidth / 2.0));
+
+
     static const GLfloat g_vertex_buffer_data[] = {
-        10.0, 10.0, cwNormal[0], cwNormal[1], direction[0], direction[1],
-        10.0, 10.0, ccwNormal[0], ccwNormal[1], direction[0], direction[1],
-        100.0, 190.0, cwNormal[0], cwNormal[1], inverseDirection[0], inverseDirection[1],
-        10.0, 10.0, ccwNormal[0], ccwNormal[1], direction[0], direction[1],
-        100.0, 190.0, cwNormal[0], cwNormal[1], inverseDirection[0], inverseDirection[1],
-        100.0, 190.0, ccwNormal[0], ccwNormal[1], inverseDirection[0], inverseDirection[1]
+        // Line 1
+        startPoint1[0], startPoint1[1], cwNormal_p1p2[0], cwNormal_p1p2[1],
+        startPoint2[0], startPoint2[1], ccwNormal_p1p2[0], ccwNormal_p1p2[1],
+        extrudePointDown[0], extrudePointDown[1], ccwNormal_p1p2[0], ccwNormal_p1p2[1],
+        extrudePointDown[0], extrudePointDown[1], ccwNormal_p1p2[0], ccwNormal_p1p2[1],
+        extrudePointUp[0], extrudePointUp[1], cwNormal_p1p2[0], cwNormal_p1p2[1],
+        startPoint1[0], startPoint1[1], cwNormal_p1p2[0], cwNormal_p1p2[1],
+
+        // Line 2
+        endPoint1[0], endPoint1[1], cwNormal_p2p3[0], cwNormal_p2p3[1],
+        endPoint2[0], endPoint2[1], ccwNormal_p2p3[0], ccwNormal_p2p3[1],
+        extrudePointDown[0], extrudePointDown[1], ccwNormal_p2p3[0], ccwNormal_p2p3[1],
+        extrudePointDown[0], extrudePointDown[1], ccwNormal_p2p3[0], ccwNormal_p2p3[1],
+        extrudePointUp[0], extrudePointUp[1], cwNormal_p2p3[0], cwNormal_p2p3[1],
+        endPoint1[0], endPoint1[1], cwNormal_p2p3[0], cwNormal_p2p3[1]
     };
 
     glGenBuffers(1, &vertexbuffer);
@@ -270,6 +285,9 @@ void render(){
     GLint uniProj = glGetUniformLocation(program, "project");
     glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(ortho));
 
+    GLint uniLineWidth = glGetUniformLocation(program, "u_lineWidth");
+    glUniform1f(uniLineWidth, lineWidth);
+
     // 1st attribute buffer : vertices
     GLuint VertexPosition_location = glGetAttribLocation(program, "vPosition");
     glEnableVertexAttribArray(VertexPosition_location);
@@ -279,7 +297,7 @@ void render(){
                           2,                  // size
                           GL_FLOAT,           // type
                           GL_FALSE,           // normalized?
-                          sizeof(GLfloat) * 6,                  // stride
+                          sizeof(GLfloat) * 4,                  // stride
                           (void*)0            // array buffer offset
                           );
 
@@ -292,25 +310,13 @@ void render(){
                           2,                  // size
                           GL_FLOAT,           // type
                           GL_FALSE,           // normalized?
-                          sizeof(GLfloat) * 6,                  // stride
+                          sizeof(GLfloat) * 4,                  // stride
                           (void*)(2 * sizeof(GLfloat))           // array buffer offset
                           );
 
 
-    // 3nd attribute buffer : directions
-    GLuint Direction_location = glGetAttribLocation(program, "a_Direction");
-    glEnableVertexAttribArray(Direction_location);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-    glVertexAttribPointer(
-                          Direction_location,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
-                          2,                  // size
-                          GL_FLOAT,           // type
-                          GL_FALSE,           // normalized?
-                          sizeof(GLfloat) * 6,                  // stride
-                          (void*)(4 * sizeof(GLfloat))           // array buffer offset
-                          );
     // Draw the triangle !
-    glDrawArrays(GL_TRIANGLES, 0, 6); // 3 indices starting at 0 -> 1 triangle
+    glDrawArrays(GL_TRIANGLES, 0, 12); // 3 indices starting at 0 -> 1 triangle
 
     glDisableVertexAttribArray(0);
 }
