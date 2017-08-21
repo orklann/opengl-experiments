@@ -26,20 +26,15 @@ const char * VERTEX_SHADER = R"SHADER(
 #version 330 core
 
 layout(location = 0) in vec4 vPosition;
-in vec2 a_Normal;
 
-out vec2 vNormal;
-
-uniform float u_lineWidth;
 uniform mat4 modelView;
 uniform mat4 project;
+uniform vec2 u_center;
 
 void
 main(){
-    float lineWidth = u_lineWidth + 1.0;
     vec4 pos = project * modelView * vec4(vPosition.xy / 1.0, 0, 1);
     gl_Position = pos;
-    vNormal = a_Normal;
 }
 )SHADER";
 
@@ -47,22 +42,24 @@ main(){
 const char * FRAGMENT_SHADER = R"SHADER(
 #version 330 core
 
-#define feather 1.0
+#define feather 0.5
 
-in vec2 vNormal;
+uniform vec2 u_center;
+uniform float u_radius;
 out vec4 fColor;
 
 uniform float u_lineWidth;
 void
 main(){
-    float lineWidth = u_lineWidth + 0.5;
-    float dist = length(vNormal) * lineWidth;
-    float alpha = dist < lineWidth - feather - feather? 1.0 :clamp(((lineWidth - dist) / feather / 2.0) , 0.0, 1.0);
+    vec2 p = vec2(gl_FragCoord.x, gl_FragCoord.y);
+    float dist = distance(p, u_center);
+    float alpha = dist > u_radius ? 0.0 : clamp(abs(dist - u_radius) / 1.0, 0.0, 1.0);
     fColor = vec4(0.0, 0.0, 0.0, alpha);
 }
 )SHADER";
 
-const float lineWidth = 4.0;
+float radius = 50.0;
+glm::vec2 center = glm::vec2(100.0, 200.0);
 
 //Screen dimension constants
 const int SCREEN_WIDTH = 640;
@@ -98,47 +95,27 @@ void initVertices(){
     // Create and compile our GLSL program from the shaders
     program = LoadShaders(VERTEX_SHADER, FRAGMENT_SHADER);
 
-    // Line points
-    glm::vec2 p1 = glm::vec2(50, 20);
-    glm::vec2 p2 = glm::vec2(120, 190);
-    glm::vec2 p3 = glm::vec2(200, 20);
+    // Arc points
+    glm::vec2 p1 = center;
+    glm::vec2 vP1P2 = glm::vec2(radius, 0);
+    glm::vec2 vP1P3 = glm::vec2(0, -1 * radius);
 
-    glm::vec2 cwNormal_p1p2 = perp(glm::normalize(p2 - p1));
-    glm::vec2 ccwNormal_p1p2 = cwNormal_p1p2 * glm::vec2(-1.0);
-
-    glm::vec2 cwNormal_p2p3 = perp(glm::normalize(p3 - p2));
-    glm::vec2 ccwNormal_p2p3 =  cwNormal_p2p3 * glm::vec2(-1.0);
-
-    glm::vec2 joinNormal = cwNormal_p1p2 + cwNormal_p2p3;
-    float cosHalfAngle = (cwNormal_p2p3[0] * joinNormal[0]) + (cwNormal_p2p3[1] * joinNormal[1]);
-    float miterLengthRatio = 1 / cosHalfAngle;
-
-    // Calculate 6 points to form 2 lines
-    glm::vec2 startPoint1 = p1 + (cwNormal_p1p2 * glm::vec2(lineWidth / 2.0));
-    glm::vec2 startPoint2 = p1 + (ccwNormal_p1p2 * glm::vec2(lineWidth / 2.0));
-    glm::vec2 miterVector = joinNormal * glm::vec2(miterLengthRatio * lineWidth / 2.0);
-    glm::vec2 extrudePointUp = p2 + miterVector;
-    glm::vec2 extrudePointDown = p2 + (miterVector * glm::vec2(-1.0));
-    glm::vec2 endPoint1 = p3 + (cwNormal_p2p3 * glm::vec2(lineWidth / 2.0));
-    glm::vec2 endPoint2 = p3 + (ccwNormal_p2p3 * glm::vec2(lineWidth / 2.0));
+    glm::vec2 p2 = p1 + vP1P2;
+    glm::vec2 p3 = p1 + vP1P3;
+    glm::vec2 p4 = p2 + vP1P3;
+    glm::vec2 p5 = glm::vec2((p2[0] + p3[0]) / 2, (p2[1] + p3[1]) / 2);
 
 
     static const GLfloat g_vertex_buffer_data[] = {
-        // Line 1
-        startPoint1[0], startPoint1[1], cwNormal_p1p2[0], cwNormal_p1p2[1],
-        startPoint2[0], startPoint2[1], ccwNormal_p1p2[0], ccwNormal_p1p2[1],
-        extrudePointDown[0], extrudePointDown[1], ccwNormal_p1p2[0], ccwNormal_p1p2[1],
-        extrudePointDown[0], extrudePointDown[1], ccwNormal_p1p2[0], ccwNormal_p1p2[1],
-        extrudePointUp[0], extrudePointUp[1], cwNormal_p1p2[0], cwNormal_p1p2[1],
-        startPoint1[0], startPoint1[1], cwNormal_p1p2[0], cwNormal_p1p2[1],
+        // triangle 1
+       p5[0], p5[1],
+       p2[0], p2[1],
+       p4[0], p4[1],
 
-        // Line 2
-        endPoint1[0], endPoint1[1], cwNormal_p2p3[0], cwNormal_p2p3[1],
-        endPoint2[0], endPoint2[1], ccwNormal_p2p3[0], ccwNormal_p2p3[1],
-        extrudePointDown[0], extrudePointDown[1], ccwNormal_p2p3[0], ccwNormal_p2p3[1],
-        extrudePointDown[0], extrudePointDown[1], ccwNormal_p2p3[0], ccwNormal_p2p3[1],
-        extrudePointUp[0], extrudePointUp[1], cwNormal_p2p3[0], cwNormal_p2p3[1],
-        endPoint1[0], endPoint1[1], cwNormal_p2p3[0], cwNormal_p2p3[1]
+       // triangle 2
+       p5[0], p5[1],
+       p3[0], p3[1],
+       p4[0], p4[1],
     };
 
     glGenBuffers(1, &vertexbuffer);
@@ -285,8 +262,13 @@ void render(){
     GLint uniProj = glGetUniformLocation(program, "project");
     glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(ortho));
 
-    GLint uniLineWidth = glGetUniformLocation(program, "u_lineWidth");
-    glUniform1f(uniLineWidth, lineWidth);
+    GLint uniRadius = glGetUniformLocation(program, "u_radius");
+    glUniform1f(uniRadius, radius);
+
+    GLint uniCenter = glGetUniformLocation(program, "u_center");
+    // 400 = canvas height, need to translate origin to lower left
+    // because gl_FragCoord is base on lower left origin
+    glUniform2f(uniCenter, center[0], SCREEN_HEIGHT - center[1]);
 
     // 1st attribute buffer : vertices
     GLuint VertexPosition_location = glGetAttribLocation(program, "vPosition");
@@ -297,26 +279,12 @@ void render(){
                           2,                  // size
                           GL_FLOAT,           // type
                           GL_FALSE,           // normalized?
-                          sizeof(GLfloat) * 4,                  // stride
+                          sizeof(GLfloat) * 2,                  // stride
                           (void*)0            // array buffer offset
                           );
 
-    // 2nd attribute buffer : normals
-    GLuint Normal_location = glGetAttribLocation(program, "a_Normal");
-    glEnableVertexAttribArray(Normal_location);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-    glVertexAttribPointer(
-                          Normal_location,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
-                          2,                  // size
-                          GL_FLOAT,           // type
-                          GL_FALSE,           // normalized?
-                          sizeof(GLfloat) * 4,                  // stride
-                          (void*)(2 * sizeof(GLfloat))           // array buffer offset
-                          );
-
-
     // Draw the triangle !
-    glDrawArrays(GL_TRIANGLES, 0, 12); // 3 indices starting at 0 -> 1 triangle
+    glDrawArrays(GL_TRIANGLES, 0, 6); // 3 indices starting at 0 -> 1 triangle
 
     glDisableVertexAttribArray(0);
 }
